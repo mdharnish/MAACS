@@ -6,7 +6,7 @@ output: html_document
 
 ## Name
 
-Please enter your name here.
+Dharnish Muralidharan
 
 ### Setup
 
@@ -14,8 +14,8 @@ Read in the data with `read_csv()` and store the data as an R object named `data
 
 
 ```{r}
-## Load the data and any necessary packages here.
-
+library(readr)
+dataset <- read_csv("maacs.csv.gz", show_col_types = FALSE)
 ```
 
 ## Part 1
@@ -32,9 +32,20 @@ NOTE: For this part, do not use any plots.
 
 ```{r}
 ## Write your function here
+check_fev1_increases_with_age <- function(dataset) {
+  mean_younger_group <- mean(dataset$fev1[dataset$age <= median(dataset$age, na.rm = TRUE)], na.rm = TRUE)
+  mean_older_group   <- mean(dataset$fev1[dataset$age >  median(dataset$age, na.rm = TRUE)], na.rm = TRUE)
+  
+  if (mean_older_group > mean_younger_group) {
+    return(TRUE)
+  } else {
+    return(FALSE)
+  }
+}
 
+check_fev1_increases_with_age(dataset)
 ```
-
+This function tests whether older children have a higher mean FEV1 than younger children by comparing the averages of the two groups split at the median age. It returns TRUE if the older group’s mean FEV1 is higher, and FALSE otherwise.
 
 ## Part 2
 
@@ -44,13 +55,14 @@ How much does FEV1 change for a 1-year increase in the child's age?
 
 ```{r}
 ## Add your code here
-
+regression_model <- lm(fev1 ~ age, data = dataset)
+coef(regression_model)["age"]
 ```
-
+This output gives the estimated slope from the regression model, showing how much FEV1 (in liters) changes on average for a 1-year increase in age.
 
 Write your data analysis statement interpreting the regression model here:
 
-
+For every 1-year increase in a child's age, the linear regression model estimates that the FEV1 value increases by `r round(coef(regression_model)["age"], 3)` units, suggesting that older children are able to exhale more air in one second compared to younger children.
 
 ## Part 3
 
@@ -62,19 +74,26 @@ NOTE:
 
 * Do not use the code you write in Part 1 as a supporting premise
 
-```{r}
+```{r fig.width = 10, fig.height = 10}
 ## Add your code here
+ci_age_coef <- confint(regression_model)["age", , drop = TRUE]
+ci_age_coef
 
+corr_age_fev1 <- cor(dataset$age, dataset$fev1, use = "complete.obs")
+corr_age_fev1
+
+plot(dataset$age, dataset$fev1, xlab = "Age (years)", ylab = "FEV1 (liters)")
+abline(lm(fev1 ~ age, data = dataset), col = "red", lwd = 2)
 ```
-
+This code computes the 95% confidence interval for the age coefficient from the regression model, calculates the correlation coefficient between age and FEV1, and produces a scatter plot with a fitted regression line to illustrate the relationship.
 
 Write the three supporting premise statements here:
 
-1. 
+1. The 95% confidence interval for the age coefficient in the regression model lies entirely above zero.
 
-2. 
+2. The correlation coefficient between age and FEV1 is positive.
 
-3. 
+3. The scatter plot of age versus FEV1 with the fitted regression line shows an evident upward trend.
 
 
 ## Part 4
@@ -90,25 +109,77 @@ For statements involving plots, instead of returning `TRUE` or `FALSE`, you func
 
 ```{r}
 ## Function for supporting premise statement 1
-
+premise1 <- function(dataset) {
+  regression_model <- lm(fev1 ~ age, data = dataset)
+  ci <- confint(regression_model)["age", ]
+  if (ci[1] > 0 & ci[2] > 0) {
+    return(TRUE)
+  } else {
+    return(FALSE)
+  }
+}
 ```
-
+This function fits fev1 ~ age, computes the 95% confidence interval for the age coefficient, and returns TRUE only if the entire interval lies above zero. A TRUE output indicates a statistically significant positive association between age and FEV1 in this dataset.
 
 ```{r}
 ## Function for supporting premise statement 2
-
+premise2 <- function(dataset) {
+  corr_coef <- cor(dataset$age, dataset$fev1, use = "complete.obs")
+  return(!is.na(corr_coef) && corr_coef > 0)
+}
 ```
+This function calculates the Pearson correlation between age and FEV1 using complete cases and returns TRUE if the correlation is strictly positive. A TRUE output indicates that higher age is associated with higher FEV1 on average.
 
+```{r, fig.height = 10, fig.width = 10}
+## Function for supporting premise statement 3
+premise3 <- function(dataset) {
+  # 1) Produce the plot used in the statement
+  x <- dataset$age
+  y <- dataset$fev1
+
+  plot(x, y, 
+       xlab = "Age (years)", 
+       ylab = "FEV1 (liters)", 
+       main = "Actual: FEV1 vs. Age")
+  abline(lm(y ~ x), col = "red", lwd = 2)
+
+  # 2) Produce a hypothetical version of the plot in the event the statement is true (simulated data)
+  n <- length(x)
+  set.seed(1)
+  x_hypoth <- runif(n, min(x), max(x))
+  slope_hypoth <- 0.2
+  intercept_hypoth <- 1.0
+  y_hypoth <- intercept_hypoth + slope_hypoth * x_hypoth + rnorm(n, sd = 0.3)
+
+  xlim_shared <- range(c(x, x_hypoth), na.rm = TRUE)
+  ylim_shared <- range(c(y, y_hypoth), na.rm = TRUE)
+
+  plot(x_hypoth, y_hypoth,
+       xlab = "Age (years)",
+       ylab = "FEV1 (liters)",
+       main = "Hypothetical: Positive Linear Trend (FEV1 vs. Age)",
+       xlim = xlim_shared, ylim = ylim_shared)
+  abline(lm(y_hypoth ~ x_hypoth), col = "red", lwd = 2)
+}
+```
+This function produces two visualizations: (1) the actual scatter plot of age vs. FEV1 with a fitted regression line; and (2) a hypothetical plot generated from simulated data that illustrates a clear positive linear trend (what the data would look like if the premise is true).
+
+Execute each of your functions and show that they produce the expected output.
 
 ```{r}
-## Function for supporting premise statement 3
-
+premise1(dataset)
 ```
+The call above executes the function on the study data. An output of TRUE confirms that the CI for the age coefficient is wholly positive; FALSE indicates the CI crosses or falls below zero.
 
-Execute each of your function and show that the produce the expected output.
+```{r}
+premise2(dataset)
+```
+The call above runs the correlation check on the dataset. TRUE indicates a positive correlation between age and FEV1; FALSE indicates non-positive or undefined correlation.
 
-
-
+```{r fig.width = 10, fig.height = 10}
+premise3(dataset)
+```
+The call above renders the two plots described above for inspection: the observed relationship and a hypothetical “true” positive trend for comparison.
 
 ## Part 5
 
@@ -118,4 +189,4 @@ Create a fault tree for the alternative outcome describing how the alternative o
 
 Your fault tree should be created as a separate image and does not need to be created in R. Upload the image of the fault tree to Canvas.
 
-
+One alternative to the primary statement "FEV1 values in children are higher in older children relative to younger children" is the statement that "FEV1 values in children show no consistent difference between older children and younger children."
